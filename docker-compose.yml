@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  # Supabase PostgreSQL Database
+  postgres:
+    image: supabase/postgres:15.1.0.117
+    container_name: findyourking-db
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-your_super_secret_password}
+      POSTGRES_DB: findyourking
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database:/docker-entrypoint-initdb.d
+    networks:
+      - findyourking-network
+
+  # Supabase Studio (Database Management UI)
+  studio:
+    image: supabase/studio:20231123-ce42139
+    container_name: findyourking-studio
+    environment:
+      SUPABASE_URL: http://kong:8000
+      STUDIO_PG_META_URL: http://meta:8080
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+    ports:
+      - "3001:3000"
+    networks:
+      - findyourking-network
+    depends_on:
+      - postgres
+
+  # Next.js Application
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: findyourking-web
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-your_super_secret_password}@postgres:5432/findyourking
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - findyourking-network
+    depends_on:
+      - postgres
+    command: npm run dev
+
+  # Redis (for caching and real-time features)
+  redis:
+    image: redis:7-alpine
+    container_name: findyourking-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - findyourking-network
+
+networks:
+  findyourking-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
